@@ -1,28 +1,41 @@
 import nodemailer from 'nodemailer';
+import bcryptjs from "bcryptjs"
+import User from '@/models/userModel';
 
 export const sendMail = async({email, emailType, userID}: any) =>{
     try {
 
+      const hashedToken = await bcryptjs.hash(userID.toString(), 10)
         //TODO ::::: configure mail for usage
+        if(emailType === "VERIFY"){
+          await User.findByIdAndUpdate(userID,
+             {verifyToken: hashedToken, verifyTokenExpiry: Date.now() + 3600000})
+        } else if(emailType === "RESET"){
+          await User.findByIdAndUpdate(userID,
+            {forgotPasswordToken: hashedToken, forgotPasswordTokenExpiry: Date.now() + 3600000})
+        }
 
-        const transporter = nodemailer.createTransport({
-            host: "smtp.ethereal.email",
-            port: 587,
-            secure: false, // Use `true` for port 465, `false` for all other ports
-            auth: {
-              user: "maddison53@ethereal.email",
-              pass: "jn7jnAPss4f63QBp6D",
-            },
-          });
+        var transport = nodemailer.createTransport({
+          host: "sandbox.smtp.mailtrap.io",
+          port: 2525,
+          auth: {
+            user: "1f08e73fabf805",
+            pass: "c69d70beb07615"
+          }
+        });
 
           const mailOptions = {
             from: 'nadeemkhan6993@gmail.com', // sender address
             to: email, // list of receivers
             subject: emailType === "VERIFY" ? "Verify your email" : "Reset your password", // Subject line
-            html: "<b>Hello world?</b>", // html body
+            html: `<p>Click <a href="${process.env.DOMAIN}/verifyemail?token=${hashedToken}">here</a> to 
+            ${emailType === "VERIFY" ?
+               "Verify your email"  : "Reset your password"} or
+                copy and paste the link below in your browser.<br>
+                 ${process.env.DOMAIN}/verifyemail?token=${hashedToken}</p>`,
           }
 
-          const mailResponse = await transporter.sendMail(mailOptions)
+          const mailResponse = await transport.sendMail(mailOptions)
           return mailResponse
     } catch (error:any) {
         throw new Error(error.message)
