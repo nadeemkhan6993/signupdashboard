@@ -2,7 +2,8 @@ import mongoose from "mongoose";
 
 export async function connectDB() {
     try {
-        mongoose.connect(process.env.MONGO_URL!)
+        const mongodburl = decodeURIComponent(atob(`${process.env.MONGO_URL}`))
+        mongoose.connect(mongodburl!)
         const connection = mongoose.connection
 
         connection.on('connected', () => {
