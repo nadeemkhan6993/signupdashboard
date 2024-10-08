@@ -32,7 +32,9 @@ export async function POST (request: NextRequest){
             email: user.email
         }
 
-        const token = jwt.sign(tokenData, process.env.TOKEN_SECRET!, {expiresIn : '1d'})
+        const tokenSecret = decodeURIComponent(atob(`${process.env.TOKEN_SECRET}`))
+
+        const token = jwt.sign(tokenData, tokenSecret!, {expiresIn : '1d'})
 
         const response = NextResponse.json({
             message: "Logged in success.",
