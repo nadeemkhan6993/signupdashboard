@@ -39,42 +39,64 @@ const SignUp = () => {
   }, [user])
 
   return (
-    <div className='flex flex-col items-center justify-center min-h-screen py-2'>
-      <h1>{loading ? "Processing..............!!!!" : "Signup"} </h1>
-      <hr />
-      <label htmlFor="username">username</label>
-      <input 
-        type="text"
-        className='p-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus-border-gray-600 text-black'
-        placeholder='username' 
-        value={user.userName} 
-        id="username" 
-        onChange={(e)=> setUser({...user, userName: e.target.value})} />
-        <hr />
-        <label htmlFor="email">email</label>
-      <input 
-        type="email"
-        className='p-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus-border-gray-600 text-black'
-        placeholder='email' 
-        value={user.email} 
-        id="email" 
-        onChange={(e)=> setUser({...user, email: e.target.value})} />
-      <hr />
-      <label htmlFor="password">password</label>
-      <input 
-        type="password"
-        className='p-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus-border-gray-600 text-black'
-        placeholder='password' 
-        value={user.password} 
-        id="password" 
-        onChange={(e)=> setUser({...user, password: e.target.value})} />
-      <hr />
-      <button className='p-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus-border-gray-600'
-        onClick={onSignUp}
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="bg-white shadow-md rounded-2xl p-8 w-full max-w-sm text-center">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">
+          {loading ? "Processing..." : "Signup"}
+        </h1>
+
+        <div className="mb-4 text-left">
+          <label htmlFor="username" className="block text-gray-600 mb-1 font-medium">Username</label>
+          <input
+            type="text"
+            id="username"
+            placeholder="Enter your username"
+            className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-black"
+            value={user.userName}
+            onChange={(e) => setUser({ ...user, userName: e.target.value })}
+          />
+        </div>
+
+        <div className="mb-4 text-left">
+          <label htmlFor="email" className="block text-gray-600 mb-1 font-medium">Email</label>
+          <input
+            type="email"
+            id="email"
+            placeholder="Enter your email"
+            className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-black"
+            value={user.email}
+            onChange={(e) => setUser({ ...user, email: e.target.value })}
+          />
+        </div>
+
+        <div className="mb-6 text-left">
+          <label htmlFor="password" className="block text-gray-600 mb-1 font-medium">Password</label>
+          <input
+            type="password"
+            id="password"
+            placeholder="Enter your password"
+            className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-black"
+            value={user.password}
+            onChange={(e) => setUser({ ...user, password: e.target.value })}
+          />
+        </div>
+
+        <button
+          onClick={onSignUp}
+          className={`w-full py-2 rounded-lg font-semibold transition 
+            ${buttonDisabled ? 'bg-gray-300 text-gray-700 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 text-white'}`}
+          disabled={buttonDisabled}
         >
-        {buttonDisabled ? "Fill the Form" : "Signup"}
-      </button>
-      <Link href="/login">Go to Login</Link>
+          {buttonDisabled ? "Fill the Form" : "Signup"}
+        </button>
+
+        <p className="mt-6 text-gray-500 text-sm">
+          Already have an account?{" "}
+          <Link href="/login" className="text-blue-500 hover:underline font-medium">
+            Login
+          </Link>
+        </p>
+      </div>
     </div>
   )
 }
