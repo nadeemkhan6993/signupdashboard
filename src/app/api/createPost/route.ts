@@ -8,11 +8,7 @@ import { Readable } from 'stream';
 import { IncomingMessage } from 'http';
 
 // Disable Next.js default body parsing
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+export const dynamic = 'force-dynamic';
 
 // Connect to DB once
 connectDB();
