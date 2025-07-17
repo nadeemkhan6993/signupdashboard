@@ -70,48 +70,57 @@ function Posts() {
     }
     setLoading(false);
   };
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center mt-10">
-        <svg
-          className="animate-spin h-10 w-10 text-blue-500 mb-3"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-          />
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-          />
-        </svg>
-        <p className="text-center text-gray-600">Loading...</p>
-      </div>
-    );
-  }
+
+  
   return (
-    <div className="max-w-2xl mx-auto mt-12 p-6 bg-white rounded-2xl shadow-lg">
+    <div className="max-w-2xl mx-auto mt-12 p-6 bg-white rounded-2xl shadow-lg relative">
+      {/* Loading Spinner Overlay */}
+      {loading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white bg-opacity-60 backdrop-blur-sm z-20">
+          <svg
+            className="animate-spin h-10 w-10 text-blue-500 mb-3"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+            />
+          </svg>
+          <p className="text-center text-gray-600">Loading...</p>
+        </div>
+      )}
+
       <h1 className="text-3xl font-semibold text-center text-gray-800 mb-6">Create New Post</h1>
 
+      {/* Toast Notification */}
       {responseMessage && (
         <div
-          className={`text-sm mb-4 px-4 py-2 rounded ${
-            responseMessage.startsWith('✅') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+          className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded shadow-lg transition-all duration-300 ${
+            responseMessage.startsWith('✅')
+              ? 'bg-green-600 text-white'
+              : 'bg-red-600 text-white'
           }`}
         >
           {responseMessage}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5" encType="multipart/form-data">
+      <form
+        onSubmit={handleSubmit}
+        className={`space-y-5 ${loading ? 'blur-sm pointer-events-none select-none' : ''}`}
+        encType="multipart/form-data"
+      >
         <div>
           <label className="block text-sm font-medium text-gray-700">Headline</label>
           <input
