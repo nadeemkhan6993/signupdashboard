@@ -30,15 +30,22 @@ export async function POST (request: NextRequest){
         })
 
         const savedUser = await newUser.save()
-        console.log(savedUser)
+        
+        const hashedToken = await bcryptjs.hash(savedUser._id.toString(), 10)
+        
 
         //send email verification
         await sendMail({email, emailType: "VERIFY", userID: savedUser._id})
-        return NextResponse.json({
+        const response =  NextResponse.json({
             message: "User registered Successfully.",
             success: true,
+            verifyToken: hashedToken,
             savedUser
         })
+
+        response.cookies.set("verifyToken", hashedToken, {httpOnly: true})
+
+        return  response
 
     } catch (error : any) {
         return NextResponse.json({error : error.message}, {status: 500})

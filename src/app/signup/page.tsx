@@ -17,18 +17,20 @@ const SignUp = () => {
   const [buttonDisabled, setButtonDisabled] = useState(true)
   const [loading, setLoading] = useState(false)
 
-  const onSignUp = async () =>{
+  const onSignUp = async () => {
     try {
       setLoading(true)
       const response = await axios.post("/api/users/signup", user)
-      console.log(response.data)
-      console.log("Signup Success")
-      router.push("/login")
+      console.log("Signup Success", response.data)
+      router.push(`/verifyemail?token=${response.data.verifyToken}`)
     } catch (error: any) {
       console.log("Signup failed..!!!")
       toast.error(error.message)
+    } finally {
+      setLoading(false)
     }
   }
+
 
   useEffect(() => {
     if(user.email.length > 0 && user.password.length > 0 && user.userName.length > 0){
