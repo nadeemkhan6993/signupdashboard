@@ -334,20 +334,20 @@ export default function StockDetailPage() {
             {/* Header */}
             <header className="bg-gray-800 border-b border-gray-700">
                 <div className="max-w-7xl mx-auto px-4 py-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <Link href="/" className="text-gray-400 hover:text-white">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                            <Link href="/" className="text-gray-400 hover:text-white text-sm">
                                 ← Back
                             </Link>
                             <div>
-                                <div className="flex items-center gap-3">
-                                    <h1 className="text-2xl font-bold">{stock.name}</h1>
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                                    <h1 className="text-xl sm:text-2xl font-bold">{stock.name}</h1>
                                     {/* NSE/BSE Toggle Switch */}
                                     <div className="flex items-center bg-gray-700 rounded-lg p-1">
                                         <button
                                             onClick={() => handleExchangeToggle('NSE')}
                                             disabled={exchangeLoading}
-                                            className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${
+                                            className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium transition-all ${
                                                 exchange === 'NSE'
                                                     ? 'bg-blue-600 text-white shadow-md'
                                                     : 'text-gray-400 hover:text-white hover:bg-gray-600'
@@ -358,7 +358,7 @@ export default function StockDetailPage() {
                                         <button
                                             onClick={() => handleExchangeToggle('BSE')}
                                             disabled={exchangeLoading}
-                                            className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${
+                                            className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium transition-all ${
                                                 exchange === 'BSE'
                                                     ? 'bg-orange-600 text-white shadow-md'
                                                     : 'text-gray-400 hover:text-white hover:bg-gray-600'
@@ -371,12 +371,12 @@ export default function StockDetailPage() {
                                         <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
                                     )}
                                 </div>
-                                <p className="text-gray-400">{stock.symbol} • {stock.sector} • <span className={exchange === 'NSE' ? 'text-blue-400' : 'text-orange-400'}>{exchange}</span></p>
+                                <p className="text-sm text-gray-400 mt-1">{stock.symbol} • {stock.sector} • <span className={exchange === 'NSE' ? 'text-blue-400' : 'text-orange-400'}>{exchange}</span></p>
                             </div>
                         </div>
-                        <div className="text-right">
-                            <p className="text-3xl font-bold">₹{stock.price.toLocaleString('en-IN')}</p>
-                            <p className={`text-lg font-medium ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <div className="text-left sm:text-right">
+                            <p className="text-2xl sm:text-3xl font-bold">₹{stock.price.toLocaleString('en-IN')}</p>
+                            <p className={`text-base sm:text-lg font-medium ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                 {stock.change >= 0 ? '+' : ''}₹{stock.change.toFixed(2)} ({stock.changePercent})
                             </p>
                         </div>

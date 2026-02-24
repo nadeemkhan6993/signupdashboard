@@ -90,6 +90,13 @@ interface Stock {
     sector: string;
 }
 
+interface RecentSearch {
+    symbol: string;
+    name: string;
+    sector: string;
+    searchedAt: number;
+}
+
 interface Expert {
     id: string;
     name: string;
@@ -131,6 +138,8 @@ export default function Dashboard() {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<Stock[]>([]);
     const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+    const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
     
     // Expert auth state
     const [expert, setExpert] = useState<Expert | null>(null);
@@ -148,11 +157,49 @@ export default function Dashboard() {
         fetchStocks();
         fetchExpert();
         fetchIPOs();
+        loadRecentSearches();
         
         // Auto-refresh market data every 30 seconds
         const interval = setInterval(fetchMarketData, 30000);
         return () => clearInterval(interval);
     }, []);
+
+    const loadRecentSearches = () => {
+        try {
+            const saved = localStorage.getItem('recentStockSearches');
+            if (saved) {
+                const parsed = JSON.parse(saved) as RecentSearch[];
+                setRecentSearches(parsed.slice(0, 5));
+            }
+        } catch (error) {
+            console.error('Error loading recent searches:', error);
+        }
+    };
+
+    const saveRecentSearch = (stock: Stock | { symbol: string; name: string; sector?: string }) => {
+        try {
+            const newSearch: RecentSearch = {
+                symbol: stock.symbol,
+                name: stock.name,
+                sector: stock.sector || 'Unknown',
+                searchedAt: Date.now(),
+            };
+            
+            // Remove duplicate if exists and add new search at the beginning
+            const filtered = recentSearches.filter(s => s.symbol !== stock.symbol);
+            const updated = [newSearch, ...filtered].slice(0, 5);
+            
+            setRecentSearches(updated);
+            localStorage.setItem('recentStockSearches', JSON.stringify(updated));
+        } catch (error) {
+            console.error('Error saving recent search:', error);
+        }
+    };
+
+    const clearRecentSearches = () => {
+        setRecentSearches([]);
+        localStorage.removeItem('recentStockSearches');
+    };
 
     const fetchMarketData = async () => {
         try {
@@ -238,18 +285,50 @@ export default function Dashboard() {
             setShowSearchDropdown(true);
         } else {
             setSearchResults([]);
-            setShowSearchDropdown(false);
+            // Show recent searches when query is empty but input is focused
+            if (isSearchFocused && recentSearches.length > 0) {
+                setShowSearchDropdown(true);
+            } else {
+                setShowSearchDropdown(false);
+            }
         }
+    };
+
+    const handleSearchFocus = () => {
+        setIsSearchFocused(true);
+        if (searchQuery.length > 0) {
+            setShowSearchDropdown(true);
+        } else if (recentSearches.length > 0) {
+            setShowSearchDropdown(true);
+        }
+    };
+
+    const handleSearchBlur = () => {
+        setIsSearchFocused(false);
     };
 
     const router = useRouter();
 
-    const handleStockSelect = (stock: Stock | { symbol: string; name: string; price?: number; change?: number; changePercent?: string }) => {
+    const handleStockSelect = (stock: Stock | { symbol: string; name: string; price?: number; change?: number; changePercent?: string; sector?: string }) => {
         setShowSearchDropdown(false);
         setSearchQuery('');
+        setIsSearchFocused(false);
         setNavigatingTo(stock.symbol);
+        // Save to recent searches
+        saveRecentSearch(stock);
         // Navigate to the stock detail page
         router.push(`/stock/${encodeURIComponent(stock.symbol)}`);
+    };
+
+    const handleRecentSearchSelect = (recentSearch: RecentSearch) => {
+        setShowSearchDropdown(false);
+        setSearchQuery('');
+        setIsSearchFocused(false);
+        setNavigatingTo(recentSearch.symbol);
+        // Update recent search timestamp
+        saveRecentSearch(recentSearch);
+        // Navigate to the stock detail page
+        router.push(`/stock/${encodeURIComponent(recentSearch.symbol)}`);
     };
 
     // Chart data for index performance - using useMemo to prevent re-render on every state change
@@ -341,9 +420,10 @@ export default function Dashboard() {
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => handleSearch(e.target.value)}
-                                    onFocus={() => searchQuery && setShowSearchDropdown(true)}
+                                    onFocus={handleSearchFocus}
+                                    onBlur={handleSearchBlur}
                                     placeholder="Search stocks by name, symbol or sector..."
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg pl-10 pr-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg pl-10 pr-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                                 />
                                 <svg
                                     className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
@@ -355,7 +435,54 @@ export default function Dashboard() {
                                 </svg>
                             </div>
                             
-                            {/* Search Dropdown */}
+                            {/* Search Dropdown - Recent Searches */}
+                            {showSearchDropdown && !searchQuery && recentSearches.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
+                                    <div className="flex justify-between items-center px-4 py-2 border-b border-gray-600">
+                                        <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">Recent Searches</span>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                clearRecentSearches();
+                                                setShowSearchDropdown(false);
+                                            }}
+                                            className="text-xs text-red-400 hover:text-red-300 transition"
+                                        >
+                                            Clear All
+                                        </button>
+                                    </div>
+                                    {recentSearches.map((recent) => (
+                                        <button
+                                            key={recent.symbol}
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                handleRecentSearchSelect(recent);
+                                            }}
+                                            disabled={navigatingTo !== null}
+                                            className="w-full px-4 py-3 text-left hover:bg-gray-600 transition flex justify-between items-center border-b border-gray-600 last:border-b-0 disabled:opacity-50"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-sm sm:text-base truncate">{recent.name}</p>
+                                                    <p className="text-xs sm:text-sm text-gray-400">{recent.symbol}</p>
+                                                </div>
+                                            </div>
+                                            {navigatingTo === recent.symbol ? (
+                                                <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full flex-shrink-0"></div>
+                                            ) : (
+                                                <span className="text-xs bg-gray-600 px-2 py-1 rounded flex-shrink-0 hidden sm:inline">
+                                                    {recent.sector}
+                                                </span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            
+                            {/* Search Dropdown - Search Results */}
                             {showSearchDropdown && searchResults.length > 0 && (
                                 <div className="absolute top-full left-0 right-0 mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
                                     {searchResults.map((stock) => (
@@ -365,14 +492,14 @@ export default function Dashboard() {
                                             disabled={navigatingTo !== null}
                                             className="w-full px-4 py-3 text-left hover:bg-gray-600 transition flex justify-between items-center border-b border-gray-600 last:border-b-0 disabled:opacity-50"
                                         >
-                                            <div>
-                                                <p className="font-medium">{stock.name}</p>
-                                                <p className="text-sm text-gray-400">{stock.symbol}</p>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-medium text-sm sm:text-base truncate">{stock.name}</p>
+                                                <p className="text-xs sm:text-sm text-gray-400">{stock.symbol}</p>
                                             </div>
                                             {navigatingTo === stock.symbol ? (
-                                                <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full"></div>
+                                                <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full flex-shrink-0"></div>
                                             ) : (
-                                                <span className="text-xs bg-gray-600 px-2 py-1 rounded">
+                                                <span className="text-xs bg-gray-600 px-2 py-1 rounded flex-shrink-0 ml-2 hidden sm:inline">
                                                     {stock.sector}
                                                 </span>
                                             )}
@@ -382,7 +509,7 @@ export default function Dashboard() {
                             )}
                             
                             {showSearchDropdown && searchQuery && searchResults.length === 0 && (
-                                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 p-4 text-center text-gray-400">
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 p-4 text-center text-gray-400 text-sm">
                                     No stocks found for &quot;{searchQuery}&quot;
                                 </div>
                             )}
@@ -405,7 +532,10 @@ export default function Dashboard() {
             {showSearchDropdown && (
                 <div 
                     className="fixed inset-0 z-40" 
-                    onClick={() => setShowSearchDropdown(false)}
+                    onClick={() => {
+                        setShowSearchDropdown(false);
+                        setIsSearchFocused(false);
+                    }}
                 />
             )}
 

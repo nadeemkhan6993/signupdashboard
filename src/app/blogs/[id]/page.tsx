@@ -149,7 +149,7 @@ export default function BlogDetail() {
                     </div>
 
                     {/* Title */}
-                    <h1 className="text-3xl font-bold mb-6">{blog.title}</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold mb-6">{blog.title}</h1>
 
                     {/* Content */}
                     <div className="prose prose-invert max-w-none">
