@@ -1,60 +1,91 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Next-StockMarket
+
+An Indian Stock Market Dashboard built with Next.js 15, featuring real-time market data, interactive charts, and an expert blog system.
+
+## Features
+
+- **Market Dashboard**: Real-time Indian stock market indices (NIFTY50, SENSEX, BANKNIFTY, NIFTYIT)
+- **Interactive Charts**: Line charts, bar charts, and doughnut charts using Chart.js
+- **Market Data**: Top gainers, top losers, sector performance, market statistics
+- **Expert Blog System**: Financial experts can write and publish market analysis
+- **Expert Authentication**: Secure login with secret code registration
+
+## Tech Stack
+
+- **Framework**: Next.js 15 with App Router
+- **UI**: React 19 with Tailwind CSS
+- **Charts**: Chart.js with react-chartjs-2
+- **Database**: MongoDB with Mongoose
+- **Authentication**: JWT tokens with bcryptjs
 
 ## Getting Started
 
-First, run the development server:
+1. Install dependencies:
+```bash
+npm install
+```
 
+2. Set up environment variables in `.env`:
+```env
+MONGO_URL=your_base64_encoded_mongodb_url
+TOKEN_SECRET=your_base64_encoded_secret
+ALPHA_VANTAGE_API_KEY=your_api_key
+```
+
+3. Run the development server:
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
-
-## Testing
-
-This project includes comprehensive unit tests with >85% coverage.
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Generate coverage report
-npm run test:coverage
+```
+src/
+├── app/
+│   ├── page.tsx              # Main dashboard
+│   ├── blogs/                # Expert blogs listing
+│   │   └── [id]/             # Individual blog view
+│   ├── expert/
+│   │   ├── login/            # Expert login
+│   │   ├── signup/           # Expert registration
+│   │   ├── profile/          # Expert profile management
+│   │   └── write-blog/       # Blog writing page
+│   └── api/
+│       ├── stocks/           # Stock market APIs
+│       ├── expert/           # Expert auth APIs
+│       └── blogs/            # Blog CRUD APIs
+├── models/
+│   ├── expertModel.js        # Expert user schema
+│   └── blogModel.js          # Blog post schema
+├── helpers/
+│   └── getDataFromToken.ts   # JWT token extraction
+└── middleware.ts             # Route protection
 ```
 
-**95 test cases** covering:
-- ✅ All API routes (signup, login, logout, verifyemail, me, posts, createPost)
-- ✅ Helper functions (token extraction, email sending)
-- ✅ Middleware (route protection)
-- ✅ Database models and schemas
-- ✅ Error handling and edge cases
+## Expert Registration
 
-See [TESTING_QUICK_START.md](./TESTING_QUICK_START.md) for quick setup and [TESTING.md](./TESTING.md) for detailed testing documentation.
+Experts need a secret code to register: `ZBK897`
 
-## Learn More
+## API Routes
 
-To learn more about Next.js, take a look at the following resources:
+### Stock Market
+- `GET /api/stocks/market` - Market overview with indices, gainers, losers
+- `GET /api/stocks/quote?symbol=RELIANCE.BSE` - Individual stock quote
+- `GET /api/stocks/history?symbol=RELIANCE.BSE` - Historical data
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Expert Auth
+- `POST /api/expert/signup` - Register new expert
+- `POST /api/expert/login` - Expert login
+- `GET /api/expert/me` - Get current expert
+- `PUT /api/expert/profile` - Update expert profile
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+### Blogs
+- `GET /api/blogs` - List all blogs
+- `POST /api/blogs` - Create new blog (experts only)
+- `GET /api/blogs/[id]` - Get single blog
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+MIT

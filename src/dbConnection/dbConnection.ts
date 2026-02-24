@@ -1,22 +1,25 @@
 import mongoose from "mongoose";
 
+let isConnected = false;
+
 export async function connectDB() {
+    if (isConnected) {
+        return;
+    }
+
+    if (mongoose.connections[0].readyState) {
+        isConnected = true;
+        return;
+    }
+
     try {
-        const mongodburl = decodeURIComponent(atob(`${process.env.MONGO_URL}`))
-        mongoose.connect(mongodburl!)
-        const connection = mongoose.connection
-
-        connection.on('connected', () => {
-            console.log("Database is connected")
-        })
-        
-        connection.on('error', (error) => {
-            console.log("Database connection error : " + error);
-            process.exit()
-        })
-
+        // First URL decode, then base64 decode
+        const mongodburl = atob(decodeURIComponent(`${process.env.MONGO_URL}`))
+        await mongoose.connect(mongodburl!);
+        isConnected = true;
+        console.log("Database is connected");
     } catch (error) {
-        console.log(error)
-        console.log("Not able to connect to DataBase")
+        console.log("Database connection error:", error);
+        throw error;
     }
 }

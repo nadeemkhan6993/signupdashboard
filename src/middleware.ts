@@ -1,30 +1,28 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
  
-// This function can be marked `async` if using `await` inside
 export function middleware(request: NextRequest) {
     const path = request.nextUrl.pathname
 
+    // Expert-only routes (require expertToken)
+    const expertOnlyPaths = ['/expert/write-blog', '/expert/profile']
+    
+    // Expert auth pages (redirect to dashboard if already logged in)
+    const expertAuthPaths = ['/expert/login', '/expert/signup']
 
-    const isPublicPath = path === '/login' || path === '/signup' || path === '/verifyemail'
+    const expertToken = request.cookies.get("expertToken")?.value || ""
 
-
-    const token = request.cookies.get("token")?.value || ""
-    const verifyToken = request.cookies.get("verifyToken")?.value || ""
-
-    if(isPublicPath && token){
-        return NextResponse.redirect(new URL('/profile', request.url))
-    }
-    if(isPublicPath && verifyToken){
-        return NextResponse.redirect(new URL('/verifyemail ', request.url))
-    }
-    if(!isPublicPath && !token) {
-        return NextResponse.redirect(new URL('/login', request.url))
+    // If trying to access expert-only paths without token
+    if (expertOnlyPaths.some(p => path.startsWith(p)) && !expertToken) {
+        return NextResponse.redirect(new URL('/expert/login', request.url))
     }
 
+    // If logged in expert tries to access auth pages
+    if (expertAuthPaths.includes(path) && expertToken) {
+        return NextResponse.redirect(new URL('/', request.url))
+    }
 }
  
-// See "Matching Paths" below to learn more
 export const config = {
-  matcher: ['/','/login','/signup','/profile','/verifyemail', '/createPost', '/posts'],
+    matcher: ['/expert/:path*'],
 }
