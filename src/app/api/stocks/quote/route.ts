@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAllStocks, getStockQuote } from '@/helpers/nseHelper';
-import ALL_NSE_STOCKS from '@/helpers/allStocksData';
+import { ALL_NSE_STOCKS } from '@/helpers/allStocksData';
 
 // Alpha Vantage API configuration (fallback)
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
@@ -320,7 +320,7 @@ export async function GET(request: Request) {
                 
                 return NextResponse.json({
                     success: true,
-                    source: 'NSE+Extended',
+                    source: 'NSE+Master',
                     totalStocks: mergedStocks.length,
                     liveStocks: nseStocks.length,
                     stocks: mergedStocks

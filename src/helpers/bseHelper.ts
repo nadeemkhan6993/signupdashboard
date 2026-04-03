@@ -50,7 +50,8 @@ export async function getSensexData(): Promise<SensexData | null> {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             },
-            next: { revalidate: 60 }
+            next: { revalidate: 60 },
+            signal: AbortSignal.timeout(6000),
         });
 
         if (!response.ok) {
@@ -102,7 +103,8 @@ export async function getBSEStockQuote(symbol: string): Promise<BSEStockData | n
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             },
-            next: { revalidate: 60 }
+            next: { revalidate: 60 },
+            signal: AbortSignal.timeout(6000),
         });
 
         if (!response.ok) {
@@ -158,7 +160,8 @@ export async function getBSEIndices(): Promise<SensexData[]> {
                 method: 'GET',
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
+                },
+                signal: AbortSignal.timeout(6000),
             });
 
             if (response.ok) {

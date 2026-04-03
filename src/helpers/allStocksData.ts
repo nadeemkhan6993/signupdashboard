@@ -1123,5 +1123,3 @@ export const ALL_NSE_STOCKS = [
     { symbol: 'GVKPIL.BO', name: 'GVK Power', sector: 'Power' },
     { symbol: 'GWRL.BO', name: 'GWRL', sector: 'Textiles' },
 ];
-
-export default ALL_NSE_STOCKS;

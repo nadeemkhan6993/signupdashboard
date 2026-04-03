@@ -20,6 +20,10 @@ let cookieExpiry: number = 0;
 let cachedStocks: StockData[] | null = null;
 let stockCacheExpiry: number = 0;
 
+// Long-lived cache for the NSE equity master list (changes rarely)
+let cachedMasterStocks: StockData[] | null = null;
+let masterCacheExpiry: number = 0;
+
 interface StockData {
     symbol: string;
     name: string;
@@ -45,7 +49,8 @@ async function getCookies(): Promise<string> {
     try {
         const response = await fetch(NSE_BASE_URL, {
             method: 'GET',
-            headers: getHeaders()
+            headers: getHeaders(),
+            signal: AbortSignal.timeout(5000), // 5 s — just getting cookies
         });
         
         const cookies = response.headers.get('set-cookie') || '';
@@ -65,7 +70,8 @@ async function fetchNSEData(endpoint: string): Promise<any> {
     const response = await fetch(`${NSE_BASE_URL}${endpoint}`, {
         method: 'GET',
         headers: getHeaders(cookies),
-        next: { revalidate: 60 } // Cache for 60 seconds
+        next: { revalidate: 60 }, // Cache for 60 seconds
+        signal: AbortSignal.timeout(8000), // 8 s hard timeout per request
     });
 
     if (!response.ok) {
@@ -75,17 +81,91 @@ async function fetchNSEData(endpoint: string): Promise<any> {
     return response.json();
 }
 
+// Fetch ALL NSE-listed equities from the public NSE equity master CSV.
+// URL: https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv
+// This file is publicly accessible (no cookie required) and covers every
+// security listed on NSE — including stocks not part of any Nifty index.
+async function fetchNSEEquityMaster(): Promise<StockData[]> {
+    const now = Date.now();
+    if (cachedMasterStocks && now < masterCacheExpiry) {
+        return cachedMasterStocks;
+    }
+
+    const csvUrl = 'https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv';
+    const response = await fetch(csvUrl, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Referer': 'https://www.nseindia.com/',
+        },
+        // Cache response at fetch level for 24 hours
+        next: { revalidate: 86400 },
+        signal: AbortSignal.timeout(15000), // 15 s — CSV can be a few hundred KB
+    });
+
+    if (!response.ok) {
+        throw new Error(`NSE equity master CSV fetch failed: ${response.status}`);
+    }
+
+    const csvText = await response.text();
+    const lines = csvText.split('\n');
+
+    const stocks: StockData[] = [];
+
+    // CSV format: SYMBOL,NAME OF COMPANY,SERIES,DATE OF LISTING,PAID UP VALUE,MARKET LOT,ISIN NUMBER,FACE VALUE
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const cols = line.split(',');
+        if (cols.length < 3) continue;
+
+        const symbol = cols[0].trim().replace(/^"|"$/g, '');
+        // Company name is everything between col[1] and the 6th-from-last column
+        // to handle any rare commas in names
+        const series = cols[cols.length - 6]?.trim().replace(/^"|"$/g, '') || cols[2]?.trim().replace(/^"|"$/g, '');
+        const name = cols.slice(1, cols.length - 6).join(',').trim().replace(/^"|"$/g, '') || cols[1]?.trim().replace(/^"|"$/g, '');
+
+        if (!symbol || !name) continue;
+
+        // EQ  = regular equity (main board)
+        // BE  = trade-to-trade (book entry) equity
+        // BL  = block deal
+        // SM/ST = NSE SME (small & medium enterprise)
+        // N1–N8 = debt/structured products — skip those
+        const validSeries = ['EQ', 'BE', 'BL', 'SM', 'ST'];
+        if (!validSeries.includes(series)) continue;
+
+        stocks.push({ symbol: `${symbol}.NS`, name, series });
+    }
+
+    cachedMasterStocks = stocks;
+    masterCacheExpiry = now + 24 * 60 * 60 * 1000; // 24 hours
+
+    return stocks;
+}
+
 // Get all equity stocks
 export async function getAllStocks(): Promise<StockData[]> {
     const now = Date.now();
-    
-    // Return cached data if still valid (cache for 5 minutes)
+
+    // Return cached data if still valid (5 minutes)
     if (cachedStocks && now < stockCacheExpiry) {
         return cachedStocks;
     }
 
+    // ── Step 1: Fetch comprehensive master list from NSE equity CSV ────────────
+    // Covers all ~2,200+ NSE-listed equities, not just index members.
+    let masterStocks: StockData[] = [];
     try {
-        // Fetch from all available NSE endpoints to get maximum coverage
+        masterStocks = await fetchNSEEquityMaster();
+    } catch (masterErr) {
+        console.log('NSE equity master CSV unavailable, falling back to index-only data');
+    }
+
+    // ── Step 2: Fetch live price data from NSE index endpoints ────────────────
+    // Covers ~750 index-constituent stocks with real-time prices.
+    try {
         const endpoints = [
             '/api/equity-stockIndices?index=NIFTY%2050',
             '/api/equity-stockIndices?index=NIFTY%20NEXT%2050',
@@ -130,22 +210,19 @@ export async function getAllStocks(): Promise<StockData[]> {
             '/api/equity-stockIndices?index=NIFTY%20TRANSPORTATION%20%26%20LOGISTICS'
         ];
 
-        // Fetch all in parallel with proper error handling
         const results = await Promise.all(
-            endpoints.map(endpoint => 
+            endpoints.map(endpoint =>
                 fetchNSEData(endpoint).catch(() => ({ data: [] }))
             )
         );
 
-        // Combine all stocks and remove duplicates
         const allData = results.flatMap(result => result.data || []);
 
-        // Deduplicate by symbol
-        const stockMap = new Map<string, StockData>();
-        
+        // Build a map of live price data keyed by clean symbol
+        const liveDataMap = new Map<string, StockData>();
         allData.forEach((stock: any) => {
             if (stock.symbol && !stock.symbol.includes('NIFTY') && !stock.symbol.includes('INDEX')) {
-                stockMap.set(stock.symbol, {
+                liveDataMap.set(stock.symbol, {
                     symbol: `${stock.symbol}.NS`,
                     name: stock.companyName || stock.symbol,
                     series: stock.series,
@@ -156,27 +233,44 @@ export async function getAllStocks(): Promise<StockData[]> {
                     high: stock.dayHigh,
                     low: stock.dayLow,
                     previousClose: stock.previousClose,
-                    totalTradedVolume: stock.totalTradedVolume
+                    totalTradedVolume: stock.totalTradedVolume,
                 });
             }
         });
 
-        const stocks = Array.from(stockMap.values());
-        
-        // Sort by symbol name
-        stocks.sort((a, b) => a.symbol.localeCompare(b.symbol));
-        
-        // Cache the results
+        // ── Step 3: Merge ──────────────────────────────────────────────────────
+        // Start with the full master list (provides complete symbol+name coverage).
+        // Then overlay live price data (adds prices, may refine company names).
+        const stockMap = new Map<string, StockData>();
+
+        masterStocks.forEach(stock => stockMap.set(stock.symbol, stock));
+
+        liveDataMap.forEach((liveStock, cleanSymbol) => {
+            const nsSymbol = `${cleanSymbol}.NS`;
+            const existing = stockMap.get(nsSymbol);
+            stockMap.set(nsSymbol, { ...existing, ...liveStock });
+        });
+
+        const stocks = Array.from(stockMap.values()).sort((a, b) =>
+            a.symbol.localeCompare(b.symbol)
+        );
+
         cachedStocks = stocks;
-        stockCacheExpiry = now + 5 * 60 * 1000; // 5 minutes cache
-        
+        stockCacheExpiry = now + 5 * 60 * 1000; // 5 minutes
+
         return stocks;
     } catch (error) {
-        console.error('Failed to fetch stocks from NSE:', error);
-        // Return cached data if available, even if expired
-        if (cachedStocks) {
-            return cachedStocks;
+        console.error('Failed to fetch stock index data from NSE:', error);
+
+        // If master list was fetched, return it even without live prices
+        if (masterStocks.length > 0) {
+            const sorted = masterStocks.sort((a, b) => a.symbol.localeCompare(b.symbol));
+            cachedStocks = sorted;
+            stockCacheExpiry = now + 5 * 60 * 1000;
+            return sorted;
         }
+
+        if (cachedStocks) return cachedStocks;
         throw error;
     }
 }

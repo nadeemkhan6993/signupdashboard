@@ -159,9 +159,15 @@ export default function Dashboard() {
         fetchIPOs();
         loadRecentSearches();
         
+        // Safety: stop loading spinner after 12 s even if API never responds
+        const loadingGuard = setTimeout(() => setLoading(false), 12000);
+
         // Auto-refresh market data every 30 seconds
         const interval = setInterval(fetchMarketData, 30000);
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            clearTimeout(loadingGuard);
+        };
     }, []);
 
     const loadRecentSearches = () => {
@@ -203,7 +209,9 @@ export default function Dashboard() {
 
     const fetchMarketData = async () => {
         try {
-            const res = await fetch('/api/stocks/market');
+            const res = await fetch('/api/stocks/market', {
+                signal: AbortSignal.timeout(11000), // 11 s client-side hard limit
+            });
             const data = await res.json();
             if (data.success) {
                 setMarketData(data.data);
@@ -380,17 +388,6 @@ export default function Dashboard() {
         ],
     };
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                    <p className="text-gray-400">Loading market data...</p>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className="min-h-screen bg-gray-900 text-white">
             {/* Navigation Loading Overlay */}
@@ -516,13 +513,15 @@ export default function Dashboard() {
                         </div>
 
                         <div className="flex items-center gap-4">
-                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                marketData?.marketStatus === 'OPEN' 
-                                    ? 'bg-green-500/20 text-green-400' 
-                                    : 'bg-red-500/20 text-red-400'
-                            }`}>
-                                Market {marketData?.marketStatus}
-                            </span>
+                            {marketData?.marketStatus && (
+                                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                    marketData.marketStatus === 'OPEN'
+                                        ? 'bg-green-500/20 text-green-400'
+                                        : 'bg-red-500/20 text-red-400'
+                                }`}>
+                                    Market {marketData.marketStatus}
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -540,6 +539,15 @@ export default function Dashboard() {
             )}
 
             <main className="max-w-7xl mx-auto px-4 py-6">
+                {loading ? (
+                    <div className="flex items-center justify-center py-32">
+                        <div className="text-center">
+                            <div className="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                            <p className="text-white text-lg font-semibold">Loading market data...</p>
+                            <p className="text-gray-400 mt-1">Fetching live NSE &amp; BSE feeds</p>
+                        </div>
+                    </div>
+                ) : (<>
                 {/* Market Indices */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     {marketData?.indices.map((index, i) => (
@@ -576,7 +584,24 @@ export default function Dashboard() {
                                 options={{
                                     responsive: true,
                                     maintainAspectRatio: false,
-                                    plugins: { legend: { display: false } },
+                                    interaction: { mode: 'index', intersect: false },
+                                    plugins: {
+                                        legend: { display: false },
+                                        tooltip: {
+                                            backgroundColor: '#111827',
+                                            borderColor: '#374151',
+                                            borderWidth: 1,
+                                            titleColor: '#9ca3af',
+                                            bodyColor: '#ffffff',
+                                            padding: 12,
+                                            displayColors: false,
+                                            callbacks: {
+                                                label: (ctx) =>
+                                                    (ctx.parsed.y ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                                            },
+                                        },
+                                    },
+                                    elements: { point: { radius: 3, hoverRadius: 7 } },
                                     scales: {
                                         y: { grid: { color: 'rgba(255,255,255,0.1)' } },
                                         x: { grid: { display: false } },
@@ -618,7 +643,25 @@ export default function Dashboard() {
                                 options={{
                                     responsive: true,
                                     maintainAspectRatio: false,
-                                    plugins: { legend: { display: false } },
+                                    interaction: { mode: 'index', intersect: false },
+                                    plugins: {
+                                        legend: { display: false },
+                                        tooltip: {
+                                            backgroundColor: '#111827',
+                                            borderColor: '#374151',
+                                            borderWidth: 1,
+                                            titleColor: '#9ca3af',
+                                            bodyColor: '#ffffff',
+                                            padding: 12,
+                                            displayColors: false,
+                                            callbacks: {
+                                                label: (ctx) => {
+                                                    const v = ctx.parsed.y ?? 0;
+                                                    return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+                                                },
+                                            },
+                                        },
+                                    },
                                     scales: {
                                         y: { grid: { color: 'rgba(255,255,255,0.1)' } },
                                         x: { grid: { display: false } },
@@ -941,6 +984,7 @@ export default function Dashboard() {
                         </div>
                     )}
                 </section>
+                </>)}
             </main>
 
             {/* Footer */}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
     Chart as ChartJS,
@@ -48,6 +48,19 @@ interface StockDetail {
     pe: number;
     eps: number;
     dividend: string;
+}
+
+interface Stock {
+    symbol: string;
+    name: string;
+    sector: string;
+}
+
+interface RecentSearch {
+    symbol: string;
+    name: string;
+    sector: string;
+    searchedAt: number;
 }
 
 // Generate stable random data based on seed
@@ -101,6 +114,23 @@ export default function StockDetailPage() {
     const [expert, setExpert] = useState<Expert | null>(null);
     const [exchange, setExchange] = useState<'NSE' | 'BSE'>('NSE');
     const [exchangeLoading, setExchangeLoading] = useState(false);
+
+    const router = useRouter();
+
+    // Search state
+    const [stocks, setStocks] = useState<Stock[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<Stock[]>([]);
+    const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+    const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
+    const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetchStocks();
+        loadRecentSearches();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         fetchStockDetails();
@@ -228,6 +258,102 @@ export default function StockDetailPage() {
         }
     };
 
+    const fetchStocks = async () => {
+        try {
+            const res = await fetch('/api/stocks/quote');
+            const data = await res.json();
+            if (data.success) setStocks(data.stocks);
+        } catch (error) {
+            console.error('Error fetching stocks:', error);
+        }
+    };
+
+    const loadRecentSearches = () => {
+        try {
+            const saved = localStorage.getItem('recentStockSearches');
+            if (saved) {
+                const parsed = JSON.parse(saved) as RecentSearch[];
+                setRecentSearches(parsed.slice(0, 5));
+            }
+        } catch (error) {
+            console.error('Error loading recent searches:', error);
+        }
+    };
+
+    const saveRecentSearch = (s: Stock | { symbol: string; name: string; sector?: string }) => {
+        try {
+            const newSearch: RecentSearch = {
+                symbol: s.symbol,
+                name: s.name,
+                sector: s.sector || 'Unknown',
+                searchedAt: Date.now(),
+            };
+            const filtered = recentSearches.filter(r => r.symbol !== s.symbol);
+            const updated = [newSearch, ...filtered].slice(0, 5);
+            setRecentSearches(updated);
+            localStorage.setItem('recentStockSearches', JSON.stringify(updated));
+        } catch (error) {
+            console.error('Error saving recent search:', error);
+        }
+    };
+
+    const clearRecentSearches = () => {
+        setRecentSearches([]);
+        localStorage.removeItem('recentStockSearches');
+    };
+
+    const handleSearch = (query: string) => {
+        setSearchQuery(query);
+        if (query.length > 0) {
+            const filtered = stocks.filter(
+                s =>
+                    (s.name && s.name.toLowerCase().includes(query.toLowerCase())) ||
+                    (s.symbol && s.symbol.toLowerCase().includes(query.toLowerCase())) ||
+                    (s.sector && s.sector.toLowerCase().includes(query.toLowerCase()))
+            );
+            setSearchResults(filtered);
+            setShowSearchDropdown(true);
+        } else {
+            setSearchResults([]);
+            if (isSearchFocused && recentSearches.length > 0) {
+                setShowSearchDropdown(true);
+            } else {
+                setShowSearchDropdown(false);
+            }
+        }
+    };
+
+    const handleSearchFocus = () => {
+        setIsSearchFocused(true);
+        if (searchQuery.length > 0) {
+            setShowSearchDropdown(true);
+        } else if (recentSearches.length > 0) {
+            setShowSearchDropdown(true);
+        }
+    };
+
+    const handleSearchBlur = () => {
+        setIsSearchFocused(false);
+    };
+
+    const handleStockSelect = (s: Stock | { symbol: string; name: string; sector?: string }) => {
+        setShowSearchDropdown(false);
+        setSearchQuery('');
+        setIsSearchFocused(false);
+        setNavigatingTo(s.symbol);
+        saveRecentSearch(s);
+        router.push(`/stock/${encodeURIComponent(s.symbol)}`);
+    };
+
+    const handleRecentSearchSelect = (recent: RecentSearch) => {
+        setShowSearchDropdown(false);
+        setSearchQuery('');
+        setIsSearchFocused(false);
+        setNavigatingTo(recent.symbol);
+        saveRecentSearch(recent);
+        router.push(`/stock/${encodeURIComponent(recent.symbol)}`);
+    };
+
     // Generate seed from symbol for consistent data
     const seed = useMemo(() => 
         symbol.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0), 
@@ -304,87 +430,210 @@ export default function StockDetailPage() {
         }
     };
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                    <p className="text-gray-400">Loading stock data...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (!stock) {
-        return (
-            <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">
-                <div className="text-center">
-                    <h1 className="text-2xl font-bold mb-4">Stock not found</h1>
-                    <p className="text-gray-400 mb-4">The stock symbol &quot;{symbol}&quot; was not found.</p>
-                    <Link href="/" className="text-blue-400 hover:underline">
-                        ← Back to Dashboard
-                    </Link>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className="min-h-screen bg-gray-900 text-white">
-            {/* Header */}
-            <header className="bg-gray-800 border-b border-gray-700">
+            {/* Navigation Loading Overlay */}
+            {navigatingTo && (
+                <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm z-[100] flex items-center justify-center">
+                    <div className="bg-gray-800 rounded-xl p-6 shadow-2xl text-center">
+                        <div className="animate-spin h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                        <p className="text-gray-300">Loading stock details...</p>
+                        <p className="text-sm text-gray-500 mt-1">{navigatingTo}</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Header — always visible */}
+            <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 py-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                            <Link href="/" className="text-gray-400 hover:text-white text-sm">
-                                ← Back
-                            </Link>
-                            <div>
-                                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                                    <h1 className="text-xl sm:text-2xl font-bold">{stock.name}</h1>
-                                    {/* NSE/BSE Toggle Switch */}
-                                    <div className="flex items-center bg-gray-700 rounded-lg p-1">
+                    {/* Top row: Logo + Search + Auth */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <Link href="/" className="text-xl font-bold text-blue-400 shrink-0">
+                            Next-StockMarket
+                        </Link>
+
+                        {/* Search Bar */}
+                        <div className="relative w-full md:w-96">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => handleSearch(e.target.value)}
+                                    onFocus={handleSearchFocus}
+                                    onBlur={handleSearchBlur}
+                                    placeholder="Search stocks by name, symbol or sector..."
+                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg pl-10 pr-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                />
+                                <svg
+                                    className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+
+                            {/* Recent Searches Dropdown */}
+                            {showSearchDropdown && !searchQuery && recentSearches.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
+                                    <div className="flex justify-between items-center px-4 py-2 border-b border-gray-600">
+                                        <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">Recent Searches</span>
                                         <button
-                                            onClick={() => handleExchangeToggle('NSE')}
-                                            disabled={exchangeLoading}
-                                            className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                                                exchange === 'NSE'
-                                                    ? 'bg-blue-600 text-white shadow-md'
-                                                    : 'text-gray-400 hover:text-white hover:bg-gray-600'
-                                            }`}
+                                            onClick={(e) => { e.stopPropagation(); clearRecentSearches(); setShowSearchDropdown(false); }}
+                                            className="text-xs text-red-400 hover:text-red-300 transition"
                                         >
-                                            NSE
-                                        </button>
-                                        <button
-                                            onClick={() => handleExchangeToggle('BSE')}
-                                            disabled={exchangeLoading}
-                                            className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                                                exchange === 'BSE'
-                                                    ? 'bg-orange-600 text-white shadow-md'
-                                                    : 'text-gray-400 hover:text-white hover:bg-gray-600'
-                                            }`}
-                                        >
-                                            BSE
+                                            Clear All
                                         </button>
                                     </div>
-                                    {exchangeLoading && (
-                                        <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                                    )}
+                                    {recentSearches.map((recent) => (
+                                        <button
+                                            key={recent.symbol}
+                                            onMouseDown={(e) => { e.preventDefault(); handleRecentSearchSelect(recent); }}
+                                            disabled={navigatingTo !== null}
+                                            className="w-full px-4 py-3 text-left hover:bg-gray-600 transition flex justify-between items-center border-b border-gray-600 last:border-b-0 disabled:opacity-50"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-sm truncate">{recent.name}</p>
+                                                    <p className="text-xs text-gray-400">{recent.symbol}</p>
+                                                </div>
+                                            </div>
+                                            {navigatingTo === recent.symbol ? (
+                                                <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full flex-shrink-0"></div>
+                                            ) : (
+                                                <span className="text-xs bg-gray-600 px-2 py-1 rounded flex-shrink-0 hidden sm:inline">{recent.sector}</span>
+                                            )}
+                                        </button>
+                                    ))}
                                 </div>
-                                <p className="text-sm text-gray-400 mt-1">{stock.symbol} • {stock.sector} • <span className={exchange === 'NSE' ? 'text-blue-400' : 'text-orange-400'}>{exchange}</span></p>
-                            </div>
+                            )}
+
+                            {/* Search Results Dropdown */}
+                            {showSearchDropdown && searchResults.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
+                                    {searchResults.map((s) => (
+                                        <button
+                                            key={s.symbol}
+                                            onClick={() => handleStockSelect(s)}
+                                            disabled={navigatingTo !== null}
+                                            className="w-full px-4 py-3 text-left hover:bg-gray-600 transition flex justify-between items-center border-b border-gray-600 last:border-b-0 disabled:opacity-50"
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-medium text-sm truncate">{s.name}</p>
+                                                <p className="text-xs text-gray-400">{s.symbol}</p>
+                                            </div>
+                                            {navigatingTo === s.symbol ? (
+                                                <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full flex-shrink-0"></div>
+                                            ) : (
+                                                <span className="text-xs bg-gray-600 px-2 py-1 rounded flex-shrink-0 ml-2 hidden sm:inline">{s.sector}</span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {showSearchDropdown && searchQuery && searchResults.length === 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 p-4 text-center text-gray-400 text-sm">
+                                    No stocks found for &quot;{searchQuery}&quot;
+                                </div>
+                            )}
                         </div>
-                        <div className="text-left sm:text-right">
-                            <p className="text-2xl sm:text-3xl font-bold">₹{stock.price.toLocaleString('en-IN')}</p>
-                            <p className={`text-base sm:text-lg font-medium ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {stock.change >= 0 ? '+' : ''}₹{stock.change.toFixed(2)} ({stock.changePercent})
-                            </p>
+
+                        {/* Auth nav */}
+                        <div className="flex items-center gap-3 shrink-0">
+                            {expert ? (
+                                <>
+                                    <Link href="/expert/profile" className="text-blue-400 hover:text-blue-300 text-sm font-medium">Profile</Link>
+                                    <button onClick={handleLogout} className="text-red-400 hover:text-red-300 text-sm font-medium">Logout</button>
+                                </>
+                            ) : (
+                                <Link href="/expert/login" className="text-blue-400 hover:text-blue-300 text-sm font-medium">Expert Login</Link>
+                            )}
                         </div>
                     </div>
+
+                    {/* Stock-specific row — shown only when stock data is loaded */}
+                    {stock && (
+                        <div className="mt-3 pt-3 border-t border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                                <Link href="/" className="text-gray-400 hover:text-white text-sm shrink-0">
+                                    ← Dashboard
+                                </Link>
+                                <div>
+                                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                                        <h1 className="text-xl sm:text-2xl font-bold">{stock.name}</h1>
+                                        <div className="flex items-center bg-gray-700 rounded-lg p-1">
+                                            <button
+                                                onClick={() => handleExchangeToggle('NSE')}
+                                                disabled={exchangeLoading}
+                                                className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                                                    exchange === 'NSE'
+                                                        ? 'bg-blue-600 text-white shadow-md'
+                                                        : 'text-gray-400 hover:text-white hover:bg-gray-600'
+                                                }`}
+                                            >
+                                                NSE
+                                            </button>
+                                            <button
+                                                onClick={() => handleExchangeToggle('BSE')}
+                                                disabled={exchangeLoading}
+                                                className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                                                    exchange === 'BSE'
+                                                        ? 'bg-orange-600 text-white shadow-md'
+                                                        : 'text-gray-400 hover:text-white hover:bg-gray-600'
+                                                }`}
+                                            >
+                                                BSE
+                                            </button>
+                                        </div>
+                                        {exchangeLoading && (
+                                            <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                                        )}
+                                    </div>
+                                    <p className="text-sm text-gray-400 mt-1">{stock.symbol} • {stock.sector} • <span className={exchange === 'NSE' ? 'text-blue-400' : 'text-orange-400'}>{exchange}</span></p>
+                                </div>
+                            </div>
+                            <div className="text-left sm:text-right">
+                                <p className="text-2xl sm:text-3xl font-bold">₹{stock.price.toLocaleString('en-IN')}</p>
+                                <p className={`text-base sm:text-lg font-medium ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {stock.change >= 0 ? '+' : ''}₹{stock.change.toFixed(2)} ({stock.changePercent})
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </header>
 
+            {/* Click outside to close search dropdown */}
+            {showSearchDropdown && (
+                <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => { setShowSearchDropdown(false); setIsSearchFocused(false); }}
+                />
+            )}
+
             <main className="max-w-7xl mx-auto px-4 py-6">
+                {loading ? (
+                    <div className="flex items-center justify-center py-32">
+                        <div className="text-center">
+                            <div className="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                            <p className="text-gray-400">Loading stock data...</p>
+                        </div>
+                    </div>
+                ) : !stock ? (
+                    <div className="flex items-center justify-center py-32">
+                        <div className="text-center">
+                            <h1 className="text-2xl font-bold mb-4">Stock not found</h1>
+                            <p className="text-gray-400 mb-4">The stock symbol &quot;{symbol}&quot; was not found.</p>
+                            <Link href="/" className="text-blue-400 hover:underline">
+                                ← Back to Dashboard
+                            </Link>
+                        </div>
+                    </div>
+                ) : (
+                    <>
                 {/* Price Overview Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
                     <div className="bg-gray-800 rounded-xl p-4">
@@ -440,7 +689,24 @@ export default function StockDetailPage() {
                                 options={{
                                     responsive: true,
                                     maintainAspectRatio: false,
-                                    plugins: { legend: { display: false } },
+                                    interaction: { mode: 'index', intersect: false },
+                                    plugins: {
+                                        legend: { display: false },
+                                        tooltip: {
+                                            backgroundColor: '#111827',
+                                            borderColor: '#374151',
+                                            borderWidth: 1,
+                                            titleColor: '#9ca3af',
+                                            bodyColor: '#ffffff',
+                                            padding: 12,
+                                            displayColors: false,
+                                            callbacks: {
+                                                label: (ctx) =>
+                                                    `₹${(ctx.parsed.y ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                                            },
+                                        },
+                                    },
+                                    elements: { point: { radius: 3, hoverRadius: 7 } },
                                     scales: {
                                         y: { 
                                             grid: { color: 'rgba(255,255,255,0.1)' },
@@ -468,7 +734,27 @@ export default function StockDetailPage() {
                                     options={{
                                         responsive: true,
                                         maintainAspectRatio: false,
-                                        plugins: { legend: { display: false } },
+                                        interaction: { mode: 'index', intersect: false },
+                                        plugins: {
+                                            legend: { display: false },
+                                            tooltip: {
+                                                backgroundColor: '#111827',
+                                                borderColor: '#374151',
+                                                borderWidth: 1,
+                                                titleColor: '#9ca3af',
+                                                bodyColor: '#ffffff',
+                                                padding: 12,
+                                                displayColors: false,
+                                                callbacks: {
+                                                    label: (ctx) => {
+                                                    const v = ctx.parsed.y ?? 0;
+                                                        if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M shares`;
+                                                        if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K shares`;
+                                                        return `${v} shares`;
+                                                    },
+                                                },
+                                            },
+                                        },
                                         scales: {
                                             y: { 
                                                 grid: { color: 'rgba(255,255,255,0.1)' },
@@ -541,6 +827,8 @@ export default function StockDetailPage() {
                         </p>
                     </div>
                 </div>
+                    </>
+                )}
             </main>
 
             {/* Footer */}

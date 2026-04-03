@@ -107,6 +107,11 @@ export async function POST(req: Request) {
     }
 }
 
+// PUT is an alias for POST (profile update via form)
+export async function PUT(req: Request) {
+    return POST(req);
+}
+
 function formIncomingMessageFromRequest(req: Request): IncomingMessage {
     const readable = Readable.fromWeb(req.body as any);
     const incoming = Object.assign(readable, {
